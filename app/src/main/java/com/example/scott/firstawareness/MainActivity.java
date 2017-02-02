@@ -65,8 +65,28 @@ public class MainActivity extends AppCompatActivity {
                     ", weatherResult=" + weatherResult +
                     '}';
         }
-
     }
+
+    static class TextSnapShot {
+        String detectedActivityResult = "";
+        String headphoneStateResult = "";
+        String locationResult = "";
+        String placesResult = "";
+        String weatherResult = "";
+
+        @Override
+        public String toString() {
+            return "SnapShot{" +
+                    "detectedActivityResult=" + detectedActivityResult +
+                    ", headphoneStateResult=" + headphoneStateResult +
+                    ", locationResult=" + locationResult +
+                    ", placesResult=" + placesResult +
+                    ", weatherResult=" + weatherResult +
+                    '}';
+        }
+    }
+
+    final private TextSnapShot textSnapShot = new TextSnapShot();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,9 +99,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void takeSnapshot() {
-//        final SnapShot snapShot = new SnapShot();
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-
         textView.append("\n[TS] " + new Date());
 
         Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient)
@@ -95,9 +113,12 @@ public class MainActivity extends AppCompatActivity {
                         }
                         ActivityRecognitionResult ar = detectedActivityResult.getActivityRecognitionResult();
                         DetectedActivity probableActivity = ar.getMostProbableActivity();
-                        Log.i(TAG, probableActivity.toString());
-                        textView.append("\n[Activity] " + probableActivity.toString());
-//                        blerb(probableActivity.toString());
+                        final String s = probableActivity.toString();
+                        Log.i(TAG, s);
+                        if (!textSnapShot.detectedActivityResult.equals(s)) {
+                            textSnapShot.detectedActivityResult = s;
+                            textView.append("\n[Activity] " + s);
+                        }
                     }
                 });
 
@@ -117,9 +138,11 @@ public class MainActivity extends AppCompatActivity {
                         } else {
                             s = "Headphones are NOT plugged in.";
                         }
-                        textView.append("\n[Headphones] " + s);
+                        if (!textSnapShot.headphoneStateResult.equals(s)) {
+                            textSnapShot.headphoneStateResult = s;
+                            textView.append("\n[Headphones] " + s);
+                        }
                         Log.i(TAG, s);
-//                        blerb(s);
                     }
                 });
 
@@ -135,9 +158,11 @@ public class MainActivity extends AppCompatActivity {
                         }
                         Location location = locationResult.getLocation();
                         final String s = "Lat: " + location.getLatitude() + ", Lon: " + location.getLongitude();
-                        textView.append("\n[Location] " + s);
                         Log.i(TAG, s);
-//                        blerb(s);
+                        if (!textSnapShot.locationResult.equals(s)) {
+                            textSnapShot.locationResult = s;
+                            textView.append("\n[Location] " + s);
+                        }
                     }
                 });
 
@@ -158,13 +183,14 @@ public class MainActivity extends AppCompatActivity {
                                 final String s = p.getPlace().getName().toString() + ", likelihood: " + p.getLikelihood();
                                 textView.append("\n[Places] " + s);
                                 Log.i(TAG, s);
-//                                blerb(s);
                             }
                         } else {
                             final String s = "Place is null.";
-                            textView.append("\n[Places] " + s);
+                            if (!textSnapShot.placesResult.equals(s)) {
+                                textSnapShot.placesResult = s;
+                                textView.append("\n[Places] " + s);
+                            }
                             Log.e(TAG, s);
-//                            blerb(s);
                         }
                     }
                 });
@@ -180,13 +206,13 @@ public class MainActivity extends AppCompatActivity {
                         }
                         Weather weather = weatherResult.getWeather();
                         final String s = weather.toString();
-                        textView.append("\n[Weather] "+s);
+                        if (!textSnapShot.weatherResult.equals(s)) {
+                            textSnapShot.weatherResult = s;
+                            textView.append("\n[Weather] "+s);
+                        }
                         Log.i(TAG, s);
-//                        blerb(s);
                     }
                 });
-
-//        Log.w(TAG, "\n\n" + snapShot.toString() + "\n\n");
     }
 
     private void blerb(final String msg) {
