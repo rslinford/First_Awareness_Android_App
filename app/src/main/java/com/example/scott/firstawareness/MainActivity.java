@@ -11,6 +11,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.awareness.Awareness;
@@ -27,6 +28,7 @@ import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.places.PlaceLikelihood;
 
+import java.util.Date;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -39,9 +41,9 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable pollAwarenessRunnable = new Runnable() {
         @Override
         public void run() {
-            Log.i(TAG, "\n\nBegin handler");
+            Log.i(TAG, "Begin handler");
             takeSnapshot();
-            Log.i(TAG, "End handler \n");
+            Log.i(TAG, "End handler");
             pollAwarenessHandler.postDelayed(pollAwarenessRunnable, 60000);
         }
     };
@@ -78,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void takeSnapshot() {
 //        final SnapShot snapShot = new SnapShot();
+        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
+
+        textView.append("\n[TS] " + new Date());
 
         Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient)
                 .setResultCallback(new ResultCallback<DetectedActivityResult>() {
@@ -91,7 +96,8 @@ public class MainActivity extends AppCompatActivity {
                         ActivityRecognitionResult ar = detectedActivityResult.getActivityRecognitionResult();
                         DetectedActivity probableActivity = ar.getMostProbableActivity();
                         Log.i(TAG, probableActivity.toString());
-                        blerb(probableActivity.toString());
+                        textView.append("\n[Activity] " + probableActivity.toString());
+//                        blerb(probableActivity.toString());
                     }
                 });
 
@@ -107,12 +113,13 @@ public class MainActivity extends AppCompatActivity {
                         HeadphoneState headphoneState = headphoneStateResult.getHeadphoneState();
                         final String s;
                         if (headphoneState.getState() == HeadphoneState.PLUGGED_IN) {
-                            s = "Headphones are plugged in.\n";
+                            s = "Headphones are plugged in.";
                         } else {
-                            s = "Headphones are NOT plugged in.\n";
+                            s = "Headphones are NOT plugged in.";
                         }
+                        textView.append("\n[Headphones] " + s);
                         Log.i(TAG, s);
-                        blerb(s);
+//                        blerb(s);
                     }
                 });
 
@@ -128,8 +135,9 @@ public class MainActivity extends AppCompatActivity {
                         }
                         Location location = locationResult.getLocation();
                         final String s = "Lat: " + location.getLatitude() + ", Lon: " + location.getLongitude();
+                        textView.append("\n[Location] " + s);
                         Log.i(TAG, s);
-                        blerb(s);
+//                        blerb(s);
                     }
                 });
 
@@ -148,13 +156,15 @@ public class MainActivity extends AppCompatActivity {
                             for (int i = 0; i < 5 && i < placeLikelihoodList.size(); i++) {
                                 PlaceLikelihood p = placeLikelihoodList.get(i);
                                 final String s = p.getPlace().getName().toString() + ", likelihood: " + p.getLikelihood();
+                                textView.append("\n[Places] " + s);
                                 Log.i(TAG, s);
-                                blerb(s);
+//                                blerb(s);
                             }
                         } else {
                             final String s = "Place is null.";
+                            textView.append("\n[Places] " + s);
                             Log.e(TAG, s);
-                            blerb(s);
+//                            blerb(s);
                         }
                     }
                 });
@@ -170,8 +180,9 @@ public class MainActivity extends AppCompatActivity {
                         }
                         Weather weather = weatherResult.getWeather();
                         final String s = weather.toString();
+                        textView.append("\n[Weather] "+s);
                         Log.i(TAG, s);
-                        blerb(s);
+//                        blerb(s);
                     }
                 });
 
