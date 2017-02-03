@@ -73,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
         String locationResult = "";
         String placesResult = "";
         String weatherResult = "";
+        Date timeStamp = new Date();
 
         @Override
         public String toString() {
@@ -100,10 +101,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void takeSnapshot() {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-        textView.append("\n[TS] " + new Date());
+        textSnapShot.timeStamp = new Date();
+        textView.append("\n[TS] " + textSnapShot.timeStamp);
 
-        Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient)
-                .setResultCallback(new ResultCallback<DetectedActivityResult>() {
+        Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient).setResultCallback(
+                new ResultCallback<DetectedActivityResult>() {
                     @Override
                     public void onResult(@NonNull DetectedActivityResult detectedActivityResult) {
 //                        snapShot.detectedActivityResult = detectedActivityResult;
@@ -122,8 +124,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        Awareness.SnapshotApi.getHeadphoneState(mGoogleApiClient)
-                .setResultCallback(new ResultCallback<HeadphoneStateResult>() {
+        Awareness.SnapshotApi.getHeadphoneState(mGoogleApiClient).setResultCallback(
+                new ResultCallback<HeadphoneStateResult>() {
                     @Override
                     public void onResult(@NonNull HeadphoneStateResult headphoneStateResult) {
 //                        snapShot.headphoneStateResult = headphoneStateResult;
@@ -181,6 +183,15 @@ public class MainActivity extends AppCompatActivity {
                             for (int i = 0; i < 5 && i < placeLikelihoodList.size(); i++) {
                                 PlaceLikelihood p = placeLikelihoodList.get(i);
                                 final String s = p.getPlace().getName().toString() + ", likelihood: " + p.getLikelihood();
+                                if (i == 0) {
+                                    if (textSnapShot.placesResult.equals(s)) {
+                                        break;
+                                    }
+                                    else {
+                                       textSnapShot.placesResult = s;
+                                   }
+                                }
+
                                 textView.append("\n[Places] " + s);
                                 Log.i(TAG, s);
                             }
@@ -195,8 +206,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        Awareness.SnapshotApi.getWeather(mGoogleApiClient)
-                .setResultCallback(new ResultCallback<WeatherResult>() {
+        Awareness.SnapshotApi.getWeather(mGoogleApiClient).setResultCallback(
+                new ResultCallback<WeatherResult>() {
                     @Override
                     public void onResult(@NonNull WeatherResult weatherResult) {
 //                        snapShot.weatherResult = weatherResult;
@@ -208,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
                         final String s = weather.toString();
                         if (!textSnapShot.weatherResult.equals(s)) {
                             textSnapShot.weatherResult = s;
-                            textView.append("\n[Weather] "+s);
+                            textView.append("\n[Weather] " + s);
                         }
                         Log.i(TAG, s);
                     }
@@ -229,7 +240,7 @@ public class MainActivity extends AppCompatActivity {
                 requestPermission(permission, permissionRequestCode);
             }
         } else {
-            Toast.makeText(MainActivity.this, "Permission (already) Granted!", Toast.LENGTH_SHORT).show();
+//            blerb("Permission (already) Granted!");
         }
     }
 
