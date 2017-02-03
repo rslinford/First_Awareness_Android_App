@@ -28,13 +28,23 @@ import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.places.PlaceLikelihood;
 
-import java.util.Date;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private final static int PERMISSION_REQUEST_CODE_ACCESS_FINE_LOCATION = 1;
+    private static final int PERMISSION_REQUEST_CODE_ACCESS_FINE_LOCATION = 1;
     private static final String TAG = "Awareness";
+    private static final String RESULT_FAILURE = "result failure";
+    private static final String LOCAL_ACTIVITY_LOG_FILENAME = "local_activity_log.txt";
+    private static final DateTimeFormatter ISO_DATE_TIME_FORMAT = ISODateTimeFormat.dateTime();
 
     private GoogleApiClient mGoogleApiClient;
     private final Handler pollAwarenessHandler = new Handler();
@@ -47,25 +57,27 @@ public class MainActivity extends AppCompatActivity {
             pollAwarenessHandler.postDelayed(pollAwarenessRunnable, 60000);
         }
     };
+    private FileOutputStream localActivityLogOutputStream;
 
-    static class SnapShot {
-        DetectedActivityResult detectedActivityResult;
-        HeadphoneStateResult headphoneStateResult;
-        LocationResult locationResult;
-        PlacesResult placesResult;
-        WeatherResult weatherResult;
 
-        @Override
-        public String toString() {
-            return "SnapShot{" +
-                    "detectedActivityResult=" + detectedActivityResult +
-                    ", headphoneStateResult=" + headphoneStateResult +
-                    ", locationResult=" + locationResult +
-                    ", placesResult=" + placesResult +
-                    ", weatherResult=" + weatherResult +
-                    '}';
-        }
-    }
+//    static class SnapShot {
+//        DetectedActivityResult detectedActivityResult;
+//        HeadphoneStateResult headphoneStateResult;
+//        LocationResult locationResult;
+//        PlacesResult placesResult;
+//        WeatherResult weatherResult;
+//
+//        @Override
+//        public String toString() {
+//            return "SnapShot{" +
+//                    "detectedActivityResult=" + detectedActivityResult +
+//                    ", headphoneStateResult=" + headphoneStateResult +
+//                    ", locationResult=" + locationResult +
+//                    ", placesResult=" + placesResult +
+//                    ", weatherResult=" + weatherResult +
+//                    '}';
+//        }
+//    }
 
     static class TextSnapShot {
         String detectedActivityResult = "";
@@ -73,17 +85,19 @@ public class MainActivity extends AppCompatActivity {
         String locationResult = "";
         String placesResult = "";
         String weatherResult = "";
-        Date timeStamp = new Date();
+        DateTime timeStamp = new DateTime();
 
         @Override
         public String toString() {
-            return "SnapShot{" +
-                    "detectedActivityResult=" + detectedActivityResult +
-                    ", headphoneStateResult=" + headphoneStateResult +
-                    ", locationResult=" + locationResult +
-                    ", placesResult=" + placesResult +
-                    ", weatherResult=" + weatherResult +
-                    '}';
+            final StringBuilder sb = new StringBuilder("TextSnapShot{");
+            sb.append("detectedActivityResult='").append(detectedActivityResult).append('\'');
+            sb.append(", headphoneStateResult='").append(headphoneStateResult).append('\'');
+            sb.append(", locationResult='").append(locationResult).append('\'');
+            sb.append(", placesResult='").append(placesResult).append('\'');
+            sb.append(", weatherResult='").append(weatherResult).append('\'');
+            sb.append(", timeStamp=").append(ISO_DATE_TIME_FORMAT.print(timeStamp));
+            sb.append('}');
+            return sb.toString();
         }
     }
 
@@ -96,31 +110,66 @@ public class MainActivity extends AppCompatActivity {
 
         mGoogleApiClient = new GoogleApiClient.Builder(MainActivity.this).addApi(Awareness.API).build();
         mGoogleApiClient.connect();
+
+        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
+
+        boolean existingLog = false;
+        try {
+            final FileInputStream fis = openFileInput(LOCAL_ACTIVITY_LOG_FILENAME);
+            textView.append("\n** Reading existing local activity log");
+            int c;
+            while ((c = fis.read()) != -1) {
+                textView.append(String.valueOf((char)c));
+            }
+            existingLog = true;
+        } catch (FileNotFoundException e) {
+            textView.append("\n** Starting new local activity log");
+            Log.i(TAG, LOCAL_ACTIVITY_LOG_FILENAME + " does not exist yet");
+        } catch (IOException e) {
+            Log.e(TAG, "Failure reading " + LOCAL_ACTIVITY_LOG_FILENAME + ": " + e);
+        }
+
+        try {
+            final int mode = existingLog ? MODE_APPEND : MODE_PRIVATE;
+            localActivityLogOutputStream = openFileOutput(LOCAL_ACTIVITY_LOG_FILENAME, mode);
+        } catch (FileNotFoundException e) {
+            Log.e(TAG, "Failure opening " + LOCAL_ACTIVITY_LOG_FILENAME + ": " + e);
+        }
+
         pollAwarenessHandler.post(pollAwarenessRunnable);
     }
 
-    private void takeSnapshot() {
+    private void textViewAppend(final String s) {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-        textSnapShot.timeStamp = new Date();
-        textView.append("\n[TS] " + textSnapShot.timeStamp);
+        textView.append(s);
+        try {
+            localActivityLogOutputStream.write(s.getBytes());
+        } catch (IOException e) {
+            Log.e(TAG, "Activity log write failure: " + e);
+        }
+    }
+
+    private void takeSnapshot() {
+        textSnapShot.timeStamp = new DateTime();
+        textViewAppend("\n[TS] " + ISO_DATE_TIME_FORMAT.print(textSnapShot.timeStamp));
 
         Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient).setResultCallback(
                 new ResultCallback<DetectedActivityResult>() {
                     @Override
                     public void onResult(@NonNull DetectedActivityResult detectedActivityResult) {
-//                        snapShot.detectedActivityResult = detectedActivityResult;
+                        final String rtag = "\n[Activity] ";
                         if (!detectedActivityResult.getStatus().isSuccess()) {
-                            Log.e(TAG, "Could not get the current activity.");
+                            Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
                         ActivityRecognitionResult ar = detectedActivityResult.getActivityRecognitionResult();
                         DetectedActivity probableActivity = ar.getMostProbableActivity();
                         final String s = probableActivity.toString();
-                        Log.i(TAG, s);
                         if (!textSnapShot.detectedActivityResult.equals(s)) {
                             textSnapShot.detectedActivityResult = s;
-                            textView.append("\n[Activity] " + s);
+                            textViewAppend(rtag + s);
                         }
+                        Log.i(TAG, rtag + s);
                     }
                 });
 
@@ -128,23 +177,23 @@ public class MainActivity extends AppCompatActivity {
                 new ResultCallback<HeadphoneStateResult>() {
                     @Override
                     public void onResult(@NonNull HeadphoneStateResult headphoneStateResult) {
-//                        snapShot.headphoneStateResult = headphoneStateResult;
+                        final String rtag = "\n[Headphones] ";
                         if (!headphoneStateResult.getStatus().isSuccess()) {
-                            Log.e(TAG, "Could not get headphone state.");
+                            Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
                         HeadphoneState headphoneState = headphoneStateResult.getHeadphoneState();
                         final String s;
                         if (headphoneState.getState() == HeadphoneState.PLUGGED_IN) {
-                            s = "Headphones are plugged in.";
+                            s = "plugged in";
                         } else {
-                            s = "Headphones are NOT plugged in.";
+                            s = "NOT plugged in";
                         }
                         if (!textSnapShot.headphoneStateResult.equals(s)) {
                             textSnapShot.headphoneStateResult = s;
-                            textView.append("\n[Headphones] " + s);
+                            textViewAppend(rtag + s);
                         }
-                        Log.i(TAG, s);
+                        Log.i(TAG, rtag + s);
                     }
                 });
 
@@ -153,18 +202,18 @@ public class MainActivity extends AppCompatActivity {
                 new ResultCallback<LocationResult>() {
                     @Override
                     public void onResult(@NonNull LocationResult locationResult) {
-//                        snapShot.locationResult = locationResult;
+                        final String rtag = "\n[Location] ";
                         if (!locationResult.getStatus().isSuccess()) {
-                            Log.e(TAG, "Could not get location.");
+                            Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
                         Location location = locationResult.getLocation();
-                        final String s = "Lat: " + location.getLatitude() + ", Lon: " + location.getLongitude();
-                        Log.i(TAG, s);
+                        final String s = "Lat(" + location.getLatitude() + ") Lon(" + location.getLongitude() + ")";
                         if (!textSnapShot.locationResult.equals(s)) {
                             textSnapShot.locationResult = s;
-                            textView.append("\n[Location] " + s);
+                            textViewAppend(rtag + s);
                         }
+                        Log.i(TAG, rtag + s);
                     }
                 });
 
@@ -172,9 +221,9 @@ public class MainActivity extends AppCompatActivity {
                 new ResultCallback<PlacesResult>() {
                     @Override
                     public void onResult(@NonNull PlacesResult placesResult) {
-//                        snapShot.placesResult = placesResult;
+                        final String rtag = "\n[Places] ";
                         if (!placesResult.getStatus().isSuccess()) {
-                            Log.e(TAG, "Could not get places.");
+                            Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
                         List<PlaceLikelihood> placeLikelihoodList = placesResult.getPlaceLikelihoods();
@@ -182,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
                         if (placeLikelihoodList != null) {
                             for (int i = 0; i < 5 && i < placeLikelihoodList.size(); i++) {
                                 PlaceLikelihood p = placeLikelihoodList.get(i);
-                                final String s = p.getPlace().getName().toString() + ", likelihood: " + p.getLikelihood();
+                                final String s = p.getPlace().getName().toString() + " odds(" + p.getLikelihood() + ")";
                                 if (i == 0) {
                                     if (textSnapShot.placesResult.equals(s)) {
                                         break;
@@ -192,16 +241,16 @@ public class MainActivity extends AppCompatActivity {
                                    }
                                 }
 
-                                textView.append("\n[Places] " + s);
-                                Log.i(TAG, s);
+                                textViewAppend(rtag + s);
+                                Log.i(TAG, rtag + s);
                             }
                         } else {
-                            final String s = "Place is null.";
+                            final String s = "null result";
                             if (!textSnapShot.placesResult.equals(s)) {
                                 textSnapShot.placesResult = s;
-                                textView.append("\n[Places] " + s);
+                                textViewAppend(rtag + s);
                             }
-                            Log.e(TAG, s);
+                            Log.i(TAG, rtag + s);
                         }
                     }
                 });
@@ -210,18 +259,18 @@ public class MainActivity extends AppCompatActivity {
                 new ResultCallback<WeatherResult>() {
                     @Override
                     public void onResult(@NonNull WeatherResult weatherResult) {
-//                        snapShot.weatherResult = weatherResult;
+                        final String rtag = "\n[Weather] ";
                         if (!weatherResult.getStatus().isSuccess()) {
-                            Log.e(TAG, "Could not get weather.");
+                            Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
                         Weather weather = weatherResult.getWeather();
                         final String s = weather.toString();
                         if (!textSnapShot.weatherResult.equals(s)) {
                             textSnapShot.weatherResult = s;
-                            textView.append("\n[Weather] " + s);
+                            textViewAppend(rtag + s);
                         }
-                        Log.i(TAG, s);
+                        Log.i(TAG, rtag + s);
                     }
                 });
     }
@@ -240,16 +289,18 @@ public class MainActivity extends AppCompatActivity {
                 requestPermission(permission, permissionRequestCode);
             }
         } else {
-//            blerb("Permission (already) Granted!");
+            Log.i(TAG, "Permission (already) Granted!");
         }
     }
 
     private void blerbGrantResult(final String permission, final int grantResult) {
         if (grantResult == PackageManager.PERMISSION_GRANTED) {
-            blerb("Granted: " + permission);
+            Log.i(TAG, "Granted: " + permission);
         }
         else {
-            blerb("Denied: " + permission);
+            final String s = "Denied: " + permission;
+            blerb(s);
+            Log.e(TAG, s);
         }
     }
 
