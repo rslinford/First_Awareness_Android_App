@@ -88,11 +88,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     static class AwarenessResultDAO {
-        final String time;
-        AwarenessResultDAO() {
-            final DateTime dt = new DateTime();
-            time = HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT.print(dt);
-        }
     }
 
     static class ActivityResultDAO extends AwarenessResultDAO {
@@ -107,7 +102,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    static class ActivityResultWrapper{
+    static class AwarenessResultWrapper {
+        final String time;
+        AwarenessResultWrapper() {
+            final DateTime dt = new DateTime();
+            time = HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT.print(dt);
+        }
+    }
+
+    static class ActivityResultWrapper extends AwarenessResultWrapper{
         private final ActivityResultDAO Activity;
 
         ActivityResultWrapper(ActivityResultDAO dao){
@@ -124,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    static class HeadphoneResultWrapper{
+    static class HeadphoneResultWrapper extends AwarenessResultWrapper{
         private final HeadphoneResultDAO Headphones;
 
         HeadphoneResultWrapper(HeadphoneResultDAO dao){
@@ -143,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    static class LocationResultWrapper{
+    static class LocationResultWrapper extends AwarenessResultWrapper{
         private final LocationResultDAO Location;
 
         LocationResultWrapper(LocationResultDAO dao){
@@ -168,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    static class PlacesResultWrapper{
+    static class PlacesResultWrapper extends AwarenessResultWrapper{
         private final PlacesResultDAO Place;
 
         PlacesResultWrapper(PlacesResultDAO dao){
@@ -222,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    static class WeatherResultWrapper{
+    static class WeatherResultWrapper extends AwarenessResultWrapper{
         private final WeatherResultDAO Weather;
 
         WeatherResultWrapper(WeatherResultDAO dao){
@@ -292,10 +295,10 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         ActivityResultDAO dao = new ActivityResultDAO(detectedActivityResult);
-                        final String s = gson.toJson(new ActivityResultWrapper(dao));
+                        final String s = gson.toJson(dao);
                         if (!textSnapShot.detectedActivityResult.equals(s)) {
                             textSnapShot.detectedActivityResult = s;
-                            textViewAppend(s);
+                            textViewAppend(gson.toJson(new ActivityResultWrapper(dao)));
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -312,10 +315,10 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         HeadphoneResultDAO dao = new HeadphoneResultDAO(headphoneStateResult);
-                        final String s = gson.toJson(new HeadphoneResultWrapper(dao));
+                        final String s = gson.toJson(dao);
                         if (!textSnapShot.headphoneStateResult.equals(s)) {
                             textSnapShot.headphoneStateResult = s;
-                            textViewAppend(s);
+                            textViewAppend(gson.toJson(new HeadphoneResultWrapper(dao)));
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -332,10 +335,10 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         LocationResultDAO dao = new LocationResultDAO(locationResult);
-                        final String s = gson.toJson(new LocationResultWrapper(dao));
+                        final String s = gson.toJson(dao);
                         if (!textSnapShot.locationResult.equals(s)) {
                             textSnapShot.locationResult = s;
-                            textViewAppend(s);
+                            textViewAppend(gson.toJson(new LocationResultWrapper(dao)));
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -351,10 +354,10 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         PlacesResultDAO dao = new PlacesResultDAO(placesResult);
-                        final String s = gson.toJson(new PlacesResultWrapper(dao));
+                        final String s = gson.toJson(dao);
                         if (!textSnapShot.placesResult.equals(s)) {
                             textSnapShot.placesResult = s;
-                            textViewAppend(s);
+                            textViewAppend(gson.toJson(new PlacesResultWrapper(dao)));
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -370,10 +373,10 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         WeatherResultDAO dao = new WeatherResultDAO(weatherResult);
-                        final String s = gson.toJson(new WeatherResultWrapper(dao));
+                        final String s = gson.toJson(dao);
                         if (!textSnapShot.weatherResult.equals(s)) {
                             textSnapShot.weatherResult = s;
-                            textViewAppend(s);
+                            textViewAppend(gson.toJson(new WeatherResultWrapper(dao)));
                         }
                         Log.i(TAG, rtag + s);
                     }
