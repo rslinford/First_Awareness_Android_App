@@ -20,8 +20,7 @@
         <TextView
             android:id="@+id/LOCAL_LOG_TEXT_VIEW"
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:text="** Local Awareness Log **"/>
+            android:layout_height="wrap_content"/>
     </ScrollView>
 
 </LinearLayout>

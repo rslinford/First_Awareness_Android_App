@@ -27,8 +27,10 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.places.PlaceLikelihood;
+import com.google.gson.Gson;
 
 import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 
@@ -36,6 +38,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -45,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String RESULT_FAILURE = "result failure";
     private static final String LOCAL_ACTIVITY_LOG_FILENAME = "local_activity_log.txt";
     private static final DateTimeFormatter ISO_DATE_TIME_FORMAT = ISODateTimeFormat.dateTime();
+    private static final DateTimeFormatter HOURS_MINUTES_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm");
+    private static final DateTimeFormatter HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm:ss");
 
     private GoogleApiClient mGoogleApiClient;
     private final Handler pollAwarenessHandler = new Handler();
@@ -58,26 +63,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     private FileOutputStream localActivityLogOutputStream;
-
-
-//    static class SnapShot {
-//        DetectedActivityResult detectedActivityResult;
-//        HeadphoneStateResult headphoneStateResult;
-//        LocationResult locationResult;
-//        PlacesResult placesResult;
-//        WeatherResult weatherResult;
-//
-//        @Override
-//        public String toString() {
-//            return "SnapShot{" +
-//                    "detectedActivityResult=" + detectedActivityResult +
-//                    ", headphoneStateResult=" + headphoneStateResult +
-//                    ", locationResult=" + locationResult +
-//                    ", placesResult=" + placesResult +
-//                    ", weatherResult=" + weatherResult +
-//                    '}';
-//        }
-//    }
+    private final Gson gson = new Gson();
 
     static class TextSnapShot {
         String detectedActivityResult = "";
@@ -98,6 +84,149 @@ public class MainActivity extends AppCompatActivity {
             sb.append(", timeStamp=").append(ISO_DATE_TIME_FORMAT.print(timeStamp));
             sb.append('}');
             return sb.toString();
+        }
+    }
+
+    static class AwarenessResultDAO {
+        final String time;
+        AwarenessResultDAO() {
+            final DateTime dt = new DateTime();
+            time = HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT.print(dt);
+        }
+    }
+
+    static class ActivityResultDAO extends AwarenessResultDAO {
+        final String type;
+        final int confidence;
+
+        ActivityResultDAO(final DetectedActivityResult da) {
+            final ActivityRecognitionResult ar = da.getActivityRecognitionResult();
+            final DetectedActivity probableActivity = ar.getMostProbableActivity();
+            type = DetectedActivity.zzjW(probableActivity.getType());
+            confidence = probableActivity.getConfidence();
+        }
+    }
+
+    static class ActivityResultWrapper{
+        private final ActivityResultDAO Activity;
+
+        ActivityResultWrapper(ActivityResultDAO dao){
+            this.Activity = dao;
+        }
+    }
+
+    static class HeadphoneResultDAO extends AwarenessResultDAO {
+        final boolean plugged;
+
+        HeadphoneResultDAO(final HeadphoneStateResult hsr) {
+            final HeadphoneState headphoneState = hsr.getHeadphoneState();
+            plugged = headphoneState.getState() == HeadphoneState.PLUGGED_IN;
+        }
+    }
+
+    static class HeadphoneResultWrapper{
+        private final HeadphoneResultDAO Headphones;
+
+        HeadphoneResultWrapper(HeadphoneResultDAO dao){
+            this.Headphones = dao;
+        }
+    }
+
+    static class LocationResultDAO extends AwarenessResultDAO {
+        final double lat;
+        final double lon;
+
+        LocationResultDAO(final LocationResult lr) {
+            final Location location = lr.getLocation();
+            lat = location.getLatitude();
+            lon = location.getLongitude();
+        }
+    }
+
+    static class LocationResultWrapper{
+        private final LocationResultDAO Location;
+
+        LocationResultWrapper(LocationResultDAO dao){
+            this.Location = dao;
+        }
+    }
+
+    static class PlacesResultDAO extends AwarenessResultDAO {
+        final String name;
+        final float likelihood;
+
+        PlacesResultDAO(final PlacesResult pr) {
+            final List<PlaceLikelihood> list = pr.getPlaceLikelihoods();
+            if (list == null) {
+                name = "";
+                likelihood = 0;
+            }
+            else {
+                name = String.valueOf(list.get(0).getPlace().getName());
+                likelihood = list.get(0).getLikelihood();
+            }
+        }
+    }
+
+    static class PlacesResultWrapper{
+        private final PlacesResultDAO Place;
+
+        PlacesResultWrapper(PlacesResultDAO dao){
+            this.Place = dao;
+        }
+    }
+
+    static class WeatherResultDAO extends AwarenessResultDAO {
+        private final float temperature;
+        private final float feelsLike;
+        private final float dewPoint;
+        private final int humidity;
+        private final List<String> conditions = new ArrayList<>();
+
+        static String decodeCondition(final int condition) {
+            switch (condition) {
+                case Weather.CONDITION_UNKNOWN:
+                    return "UNKNOWN";
+                case Weather.CONDITION_CLEAR:
+                    return "CLEAR";
+                case Weather.CONDITION_CLOUDY:
+                    return "CLOUDY";
+                case Weather.CONDITION_FOGGY:
+                    return "FOGGY";
+                case Weather.CONDITION_HAZY:
+                    return "HAZY";
+                case Weather.CONDITION_ICY:
+                    return "ICY";
+                case Weather.CONDITION_RAINY:
+                    return "RAINY";
+                case Weather.CONDITION_SNOWY:
+                    return "SNOWY";
+                case Weather.CONDITION_STORMY:
+                    return "STORMY";
+                case Weather.CONDITION_WINDY:
+                    return "WINDY";
+                default:
+                    return "Undefined(" + condition + ")";
+            }
+        }
+
+        WeatherResultDAO(final WeatherResult wr) {
+            final Weather weather = wr.getWeather();
+            temperature = weather.getTemperature(Weather.FAHRENHEIT);
+            feelsLike = weather.getFeelsLikeTemperature(Weather.FAHRENHEIT);
+            dewPoint = weather.getDewPoint(Weather.FAHRENHEIT);
+            humidity = weather.getHumidity();
+            for (int c : weather.getConditions()) {
+                conditions.add(decodeCondition(c));
+            }
+        }
+    }
+
+    static class WeatherResultWrapper{
+        private final WeatherResultDAO Weather;
+
+        WeatherResultWrapper(WeatherResultDAO dao){
+            this.Weather = dao;
         }
     }
 
@@ -123,7 +252,8 @@ public class MainActivity extends AppCompatActivity {
             }
             existingLog = true;
         } catch (FileNotFoundException e) {
-            textView.append("\n** Starting new local activity log");
+            textView.append("\n** Starting new local activity log**");
+            textView.append("\n[TS] " + ISO_DATE_TIME_FORMAT.print(new DateTime()));
             Log.i(TAG, LOCAL_ACTIVITY_LOG_FILENAME + " does not exist yet");
         } catch (IOException e) {
             Log.e(TAG, "Failure reading " + LOCAL_ACTIVITY_LOG_FILENAME + ": " + e);
@@ -141,9 +271,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void textViewAppend(final String s) {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-        textView.append(s);
+        final String msg = '\n' + s;
+        textView.append(msg);
         try {
-            localActivityLogOutputStream.write(s.getBytes());
+            localActivityLogOutputStream.write(msg.getBytes());
         } catch (IOException e) {
             Log.e(TAG, "Activity log write failure: " + e);
         }
@@ -151,8 +282,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void takeSnapshot() {
         textSnapShot.timeStamp = new DateTime();
-        textViewAppend("\n[TS] " + ISO_DATE_TIME_FORMAT.print(textSnapShot.timeStamp));
-
         Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient).setResultCallback(
                 new ResultCallback<DetectedActivityResult>() {
                     @Override
@@ -162,16 +291,16 @@ public class MainActivity extends AppCompatActivity {
                             Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
-                        ActivityRecognitionResult ar = detectedActivityResult.getActivityRecognitionResult();
-                        DetectedActivity probableActivity = ar.getMostProbableActivity();
-                        final String s = probableActivity.toString();
+                        ActivityResultDAO dao = new ActivityResultDAO(detectedActivityResult);
+                        final String s = gson.toJson(new ActivityResultWrapper(dao));
                         if (!textSnapShot.detectedActivityResult.equals(s)) {
                             textSnapShot.detectedActivityResult = s;
-                            textViewAppend(rtag + s);
+                            textViewAppend(s);
                         }
                         Log.i(TAG, rtag + s);
                     }
                 });
+
 
         Awareness.SnapshotApi.getHeadphoneState(mGoogleApiClient).setResultCallback(
                 new ResultCallback<HeadphoneStateResult>() {
@@ -182,16 +311,11 @@ public class MainActivity extends AppCompatActivity {
                             Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
-                        HeadphoneState headphoneState = headphoneStateResult.getHeadphoneState();
-                        final String s;
-                        if (headphoneState.getState() == HeadphoneState.PLUGGED_IN) {
-                            s = "plugged in";
-                        } else {
-                            s = "NOT plugged in";
-                        }
+                        HeadphoneResultDAO dao = new HeadphoneResultDAO(headphoneStateResult);
+                        final String s = gson.toJson(new HeadphoneResultWrapper(dao));
                         if (!textSnapShot.headphoneStateResult.equals(s)) {
                             textSnapShot.headphoneStateResult = s;
-                            textViewAppend(rtag + s);
+                            textViewAppend(s);
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -202,16 +326,16 @@ public class MainActivity extends AppCompatActivity {
                 new ResultCallback<LocationResult>() {
                     @Override
                     public void onResult(@NonNull LocationResult locationResult) {
-                        final String rtag = "\n[Location] ";
+                        final String rtag = "\n[LatLon] ";
                         if (!locationResult.getStatus().isSuccess()) {
                             Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
-                        Location location = locationResult.getLocation();
-                        final String s = "Lat(" + location.getLatitude() + ") Lon(" + location.getLongitude() + ")";
+                        LocationResultDAO dao = new LocationResultDAO(locationResult);
+                        final String s = gson.toJson(new LocationResultWrapper(dao));
                         if (!textSnapShot.locationResult.equals(s)) {
                             textSnapShot.locationResult = s;
-                            textViewAppend(rtag + s);
+                            textViewAppend(s);
                         }
                         Log.i(TAG, rtag + s);
                     }
@@ -226,32 +350,13 @@ public class MainActivity extends AppCompatActivity {
                             Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
-                        List<PlaceLikelihood> placeLikelihoodList = placesResult.getPlaceLikelihoods();
-                        // Show the top 5 possible location results.
-                        if (placeLikelihoodList != null) {
-                            for (int i = 0; i < 5 && i < placeLikelihoodList.size(); i++) {
-                                PlaceLikelihood p = placeLikelihoodList.get(i);
-                                final String s = p.getPlace().getName().toString() + " odds(" + p.getLikelihood() + ")";
-                                if (i == 0) {
-                                    if (textSnapShot.placesResult.equals(s)) {
-                                        break;
-                                    }
-                                    else {
-                                       textSnapShot.placesResult = s;
-                                   }
-                                }
-
-                                textViewAppend(rtag + s);
-                                Log.i(TAG, rtag + s);
-                            }
-                        } else {
-                            final String s = "null result";
-                            if (!textSnapShot.placesResult.equals(s)) {
-                                textSnapShot.placesResult = s;
-                                textViewAppend(rtag + s);
-                            }
-                            Log.i(TAG, rtag + s);
+                        PlacesResultDAO dao = new PlacesResultDAO(placesResult);
+                        final String s = gson.toJson(new PlacesResultWrapper(dao));
+                        if (!textSnapShot.placesResult.equals(s)) {
+                            textSnapShot.placesResult = s;
+                            textViewAppend(s);
                         }
+                        Log.i(TAG, rtag + s);
                     }
                 });
 
@@ -264,11 +369,11 @@ public class MainActivity extends AppCompatActivity {
                             Log.e(TAG, rtag + RESULT_FAILURE);
                             return;
                         }
-                        Weather weather = weatherResult.getWeather();
-                        final String s = weather.toString();
+                        WeatherResultDAO dao = new WeatherResultDAO(weatherResult);
+                        final String s = gson.toJson(new WeatherResultWrapper(dao));
                         if (!textSnapShot.weatherResult.equals(s)) {
                             textSnapShot.weatherResult = s;
-                            textViewAppend(rtag + s);
+                            textViewAppend(s);
                         }
                         Log.i(TAG, rtag + s);
                     }
