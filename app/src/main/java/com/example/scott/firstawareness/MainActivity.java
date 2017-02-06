@@ -14,6 +14,11 @@ import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.awareness.Awareness;
 import com.google.android.gms.awareness.snapshot.DetectedActivityResult;
 import com.google.android.gms.awareness.snapshot.HeadphoneStateResult;
@@ -51,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private static final DateTimeFormatter HOURS_MINUTES_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm");
     private static final DateTimeFormatter HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm:ss");
 
-    private GoogleApiClient mGoogleApiClient;
+    private GoogleApiClient googleApiClient;
     private final Handler pollAwarenessHandler = new Handler();
     private final Runnable pollAwarenessRunnable = new Runnable() {
         @Override
@@ -63,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     private FileOutputStream localActivityLogOutputStream;
+    private RequestQueue requestQueue;
     private final Gson gson = new Gson();
 
     static class TextSnapShot {
@@ -240,22 +246,22 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mGoogleApiClient = new GoogleApiClient.Builder(MainActivity.this).addApi(Awareness.API).build();
-        mGoogleApiClient.connect();
+        googleApiClient = new GoogleApiClient.Builder(MainActivity.this).addApi(Awareness.API).build();
+        googleApiClient.connect();
 
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
 
         boolean existingLog = false;
         try {
             final FileInputStream fis = openFileInput(LOCAL_ACTIVITY_LOG_FILENAME);
-            textView.append("\n** Reading existing local activity log");
+            textView.append("\n** Reading existing local activity log **");
             int c;
             while ((c = fis.read()) != -1) {
                 textView.append(String.valueOf((char)c));
             }
             existingLog = true;
         } catch (FileNotFoundException e) {
-            textView.append("\n** Starting new local activity log**");
+            textView.append("\n** Starting new local activity log **");
             textView.append("\n[TS] " + ISO_DATE_TIME_FORMAT.print(new DateTime()));
             Log.i(TAG, LOCAL_ACTIVITY_LOG_FILENAME + " does not exist yet");
         } catch (IOException e) {
@@ -269,7 +275,29 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Failure opening " + LOCAL_ACTIVITY_LOG_FILENAME + ": " + e);
         }
 
+        requestQueue = Volley.newRequestQueue(this);
+        testFire();
         pollAwarenessHandler.post(pollAwarenessRunnable);
+    }
+
+    private void testFire() {
+        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
+
+        final String url ="http://192.168.1.209:5000/todos";
+
+        StringRequest stringRequest = new StringRequest(com.android.volley.Request.Method.GET, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        textView.append("\n** Flask Responses: " + response);
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                textView.append("\n** Flask error: " + error);
+            }
+        });
+        requestQueue.add(stringRequest);
     }
 
     private void textViewAppend(final String s) {
@@ -285,7 +313,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void takeSnapshot() {
         textSnapShot.timeStamp = new DateTime();
-        Awareness.SnapshotApi.getDetectedActivity(mGoogleApiClient).setResultCallback(
+        Awareness.SnapshotApi.getDetectedActivity(googleApiClient).setResultCallback(
                 new ResultCallback<DetectedActivityResult>() {
                     @Override
                     public void onResult(@NonNull DetectedActivityResult detectedActivityResult) {
@@ -305,7 +333,7 @@ public class MainActivity extends AppCompatActivity {
                 });
 
 
-        Awareness.SnapshotApi.getHeadphoneState(mGoogleApiClient).setResultCallback(
+        Awareness.SnapshotApi.getHeadphoneState(googleApiClient).setResultCallback(
                 new ResultCallback<HeadphoneStateResult>() {
                     @Override
                     public void onResult(@NonNull HeadphoneStateResult headphoneStateResult) {
@@ -325,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
                 });
 
         checkPermission(android.Manifest.permission.ACCESS_FINE_LOCATION, PERMISSION_REQUEST_CODE_ACCESS_FINE_LOCATION);
-        Awareness.SnapshotApi.getLocation(mGoogleApiClient).setResultCallback(
+        Awareness.SnapshotApi.getLocation(googleApiClient).setResultCallback(
                 new ResultCallback<LocationResult>() {
                     @Override
                     public void onResult(@NonNull LocationResult locationResult) {
@@ -344,7 +372,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        Awareness.SnapshotApi.getPlaces(mGoogleApiClient).setResultCallback(
+        Awareness.SnapshotApi.getPlaces(googleApiClient).setResultCallback(
                 new ResultCallback<PlacesResult>() {
                     @Override
                     public void onResult(@NonNull PlacesResult placesResult) {
@@ -363,7 +391,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        Awareness.SnapshotApi.getWeather(mGoogleApiClient).setResultCallback(
+        Awareness.SnapshotApi.getWeather(googleApiClient).setResultCallback(
                 new ResultCallback<WeatherResult>() {
                     @Override
                     public void onResult(@NonNull WeatherResult weatherResult) {
