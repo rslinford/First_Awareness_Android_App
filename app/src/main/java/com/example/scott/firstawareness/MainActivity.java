@@ -14,6 +14,8 @@ import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
@@ -44,7 +46,9 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -283,9 +287,9 @@ public class MainActivity extends AppCompatActivity {
     private void testFire() {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
 
-        final String url ="http://192.168.1.209:5000/todos";
+        final String url ="http://ec2-54-203-15-161.us-west-2.compute.amazonaws.com:5000/todos";
 
-        StringRequest stringRequest = new StringRequest(com.android.volley.Request.Method.GET, url,
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
                 new Response.Listener<String>() {
                     @Override
                     public void onResponse(String response) {
@@ -300,6 +304,36 @@ public class MainActivity extends AppCompatActivity {
         requestQueue.add(stringRequest);
     }
 
+    private void postBlerb(final String s) {
+        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
+
+        final String url ="http://ec2-54-203-15-161.us-west-2.compute.amazonaws.com:5000/todos";
+
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        textView.append("\n** POST Responses: " + response);
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                textView.append("\n** POST error: " + error);
+            }
+        }){
+            @Override
+            public byte[] getBody() throws AuthFailureError {
+                return s.getBytes();
+            }
+            @Override
+            public String getBodyContentType() {
+                return "application/json; charset=" + getParamsEncoding();
+            }
+        };
+
+        requestQueue.add(stringRequest);
+    }
+
     private void textViewAppend(final String s) {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
         final String msg = '\n' + s;
@@ -309,6 +343,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             Log.e(TAG, "Activity log write failure: " + e);
         }
+        postBlerb(s);
     }
 
     private void takeSnapshot() {
