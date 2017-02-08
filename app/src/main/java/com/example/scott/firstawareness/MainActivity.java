@@ -8,9 +8,13 @@ import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.view.GestureDetectorCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,9 +50,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -56,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "Awareness";
     private static final String RESULT_FAILURE = "result failure";
     private static final String LOCAL_ACTIVITY_LOG_FILENAME = "local_activity_log.txt";
+    private static final String LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME = "local_activity_log_post_failures.txt";
     private static final DateTimeFormatter ISO_DATE_TIME_FORMAT = ISODateTimeFormat.dateTime();
     private static final DateTimeFormatter HOURS_MINUTES_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm");
     private static final DateTimeFormatter HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm:ss");
@@ -82,6 +85,19 @@ public class MainActivity extends AppCompatActivity {
         String placesResult = "";
         String weatherResult = "";
         DateTime timeStamp = new DateTime();
+
+        public TextSnapShot() {
+            reset();
+        }
+
+        void reset() {
+            detectedActivityResult = "";
+            headphoneStateResult = "";
+            locationResult = "";
+            placesResult = "";
+            weatherResult = "";
+            timeStamp = new DateTime();
+        }
 
         @Override
         public String toString() {
@@ -255,12 +271,79 @@ public class MainActivity extends AppCompatActivity {
 
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
 
+        final GestureDetector.OnGestureListener gestureListener = new GestureDetector.OnGestureListener() {
+            private final static String TAG = "MyGestureListener";
+            @Override
+            public boolean onDown(MotionEvent event) {
+                Log.i(TAG, "onDown: " + event);
+                return true;
+            }
+
+            @Override
+            public void onShowPress(MotionEvent e) {
+                Log.i(TAG, "onShowPress! e1:" + e);
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                Log.i(TAG, "onSingleTapUp! e1:" + e);
+                return true;
+            }
+
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                Log.i(TAG, "onLongPress! e1:" + e1);
+                Log.i(TAG, "onLongPress! e2:" + e2);
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                Log.i(TAG, "onLongPress! e1:" + e);
+                textView.append("\n** long press detected");
+                textSnapShot.reset();
+                takeSnapshot();
+            }
+
+            @Override
+            public boolean onFling(MotionEvent event1, MotionEvent event2, float velocityX, float velocityY) {
+                Log.i(TAG, "onFling! e1:" + event1);
+                Log.i(TAG, "onFling! e2:" + event2);
+                return true;
+            }
+        };
+
+        final GestureDetectorCompat gestureDetectorCompat = new GestureDetectorCompat(this, gestureListener);
+
+        textView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                gestureDetectorCompat.onTouchEvent(event);
+                return true;
+            }
+        });
+
+        requestQueue = Volley.newRequestQueue(this);
+
         boolean existingLog = false;
         try {
             final FileInputStream fis = openFileInput(LOCAL_ACTIVITY_LOG_FILENAME);
             textView.append("\n** Reading existing local activity log **");
             int c;
+            final StringBuilder sb = new StringBuilder();
             while ((c = fis.read()) != -1) {
+                // Todo: move this code to a background process
+                // Todo: process POST failures instead of main file
+//                if (c == '\n') {
+//                    final String line = sb.toString();
+//                    if (line.startsWith("{")) {
+//                        postBlerbRetry(line);
+//                    }
+//                    sb.setLength(0);
+//                }
+//                else {
+//                    sb.append((char)c);
+//                }
                 textView.append(String.valueOf((char)c));
             }
             existingLog = true;
@@ -279,46 +362,92 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Failure opening " + LOCAL_ACTIVITY_LOG_FILENAME + ": " + e);
         }
 
-        requestQueue = Volley.newRequestQueue(this);
+        try {
+            try {
+                openFileInput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME);
+            } catch (FileNotFoundException e) {
+                openFileOutput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME, MODE_PRIVATE);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "POST Failures retry is broken" + e);
+        }
+
         testFire();
         pollAwarenessHandler.post(pollAwarenessRunnable);
     }
 
+    private final static String API_BASE_URI = "http://ec2-54-202-20-194.us-west-2.compute.amazonaws.com:5000";
     private void testFire() {
         final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-
-        final String url ="http://ec2-54-203-15-161.us-west-2.compute.amazonaws.com:5000/todos";
-
-        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        textView.append("\n** Flask Responses: " + response);
-                    }
-                }, new Response.ErrorListener() {
+        final String url = API_BASE_URI + "/alog";
+        final StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+            new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i(TAG, "GET Response: " + response);
+                }
+            }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                textView.append("\n** Flask error: " + error);
+                textView.append("\n** GET error: " + error);
             }
         });
         requestQueue.add(stringRequest);
     }
 
+    private void writeFailedPost(final String s) {
+        final FileOutputStream fis;
+        try {
+            fis = openFileOutput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME, MODE_APPEND);
+            fis.write(s.getBytes());
+            fis.close();
+        } catch (FileNotFoundException e) {
+            Log.e(TAG, "Failure A recording failed POST: " + e);
+        } catch (IOException e) {
+            Log.e(TAG, "Failure B recording failed POST: " + e);
+        }
+    }
+
     private void postBlerb(final String s) {
-        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
-
-        final String url ="http://ec2-54-203-15-161.us-west-2.compute.amazonaws.com:5000/todos";
-
-        StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        textView.append("\n** POST Responses: " + response);
-                    }
-                }, new Response.ErrorListener() {
+        final String url = API_BASE_URI + "/alog";
+        final StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+            new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i(TAG, "POST success");
+                }
+            }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                textView.append("\n** POST error: " + error);
+                Log.e(TAG, "POST failure: " + error);
+                writeFailedPost(s);
+            }
+        }){
+            @Override
+            public byte[] getBody() throws AuthFailureError {
+                return s.getBytes();
+            }
+            @Override
+            public String getBodyContentType() {
+                return "application/json; charset=" + getParamsEncoding();
+            }
+        };
+
+        requestQueue.add(stringRequest);
+    }
+
+    private void postBlerbRetry(final String s) {
+        final String url = API_BASE_URI + "/retry";
+        final StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+            new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i(TAG, "POST Retry success");
+                }
+            }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.e(TAG, "POST Retry failure: " + error);
             }
         }){
             @Override
