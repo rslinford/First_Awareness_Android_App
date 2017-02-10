@@ -62,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private static final DateTimeFormatter ISO_DATE_TIME_FORMAT = ISODateTimeFormat.dateTime();
     private static final DateTimeFormatter HOURS_MINUTES_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm");
     private static final DateTimeFormatter HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT = DateTimeFormat.forPattern("HH:mm:ss");
+    private static final DateTimeFormatter ISO_TIME_FORMAT = ISODateTimeFormat.basicDateTime();
 
     private GoogleApiClient googleApiClient;
     private final Handler pollAwarenessHandler = new Handler();
@@ -132,7 +133,7 @@ public class MainActivity extends AppCompatActivity {
         final String time;
         AwarenessResultWrapper() {
             final DateTime dt = new DateTime();
-            time = HOURS_MINUTES_SECONDS_DATE_TIME_FORMAT.print(dt);
+            time = ISO_DATE_TIME_FORMAT.print(dt);
         }
     }
 
@@ -384,7 +385,7 @@ public class MainActivity extends AppCompatActivity {
             new Response.Listener<String>() {
                 @Override
                 public void onResponse(String response) {
-                    Log.i(TAG, "GET Response: " + response);
+                    Log.i(TAG, "GET Response length: " + response.length());
                 }
             }, new Response.ErrorListener() {
             @Override
@@ -398,8 +399,9 @@ public class MainActivity extends AppCompatActivity {
     private void writeFailedPost(final String s) {
         final FileOutputStream fis;
         try {
+            Log.i(TAG, "Writing failed post for later retry: " + s);
             fis = openFileOutput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME, MODE_APPEND);
-            fis.write(s.getBytes());
+            fis.write((s+'\n').getBytes());
             fis.close();
         } catch (FileNotFoundException e) {
             Log.e(TAG, "Failure A recording failed POST: " + e);
@@ -409,6 +411,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void postBlerb(final String s) {
+        final TextView textView = (TextView) findViewById (R.id.LOCAL_LOG_TEXT_VIEW);
         final String url = API_BASE_URI + "/alog";
         final StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
             new Response.Listener<String>() {
@@ -421,6 +424,8 @@ public class MainActivity extends AppCompatActivity {
             public void onErrorResponse(VolleyError error) {
                 Log.e(TAG, "POST failure: " + error);
                 writeFailedPost(s);
+                textView.append("\n** POST failed: " + error);
+                textView.append("\n**    will retry later");
             }
         }){
             @Override
@@ -447,6 +452,7 @@ public class MainActivity extends AppCompatActivity {
             }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
+                writeFailedPost(s);
                 Log.e(TAG, "POST Retry failure: " + error);
             }
         }){
@@ -475,7 +481,59 @@ public class MainActivity extends AppCompatActivity {
         postBlerb(s);
     }
 
+    private List<String> parseRetryLog() {
+        final List<String> parsedLog = new ArrayList<>();
+        try {
+            final FileInputStream fis = openFileInput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME);
+            final StringBuilder line = new StringBuilder();
+            int c;
+            while ((c = fis.read()) != -1) {
+                if (c == '\n') {
+                    final String s = line.toString().trim();
+                    if (s.startsWith("{")) {
+                        parsedLog.add(s);
+                    }
+                    Log.i(TAG, "Retry line: " + line);
+                    line.setLength(0);
+                }
+                else {
+                    line.append((char) c);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to parse Retry Log" +  e);
+            e.printStackTrace();
+        }
+
+        return parsedLog;
+    }
+
+    private void resetPostFailureLog() {
+        try {
+            openFileOutput(LOCAL_ACTIVITY_LOG_POST_FAILURES_FILENAME, MODE_PRIVATE);
+        } catch (FileNotFoundException e) {
+            Log.e(TAG, "Unable to reset retry log file:" + e);
+        }
+    }
+
+    private void retryPostFailures() {
+        final List<String> eventList = parseRetryLog();
+        resetPostFailureLog();
+        Log.i(TAG, "Begin Retry Batch size(" + eventList.size() + ")");
+        if (eventList.size() == 0) {
+            Log.i(TAG, "\t nothing to do");
+            return;
+        }
+
+        for(String event : eventList) {
+            postBlerbRetry(event);
+        }
+        Log.i(TAG, "End Retry Batch size(" + eventList.size() + ")");
+    }
+
     private void takeSnapshot() {
+        retryPostFailures();
+
         textSnapShot.timeStamp = new DateTime();
         Awareness.SnapshotApi.getDetectedActivity(googleApiClient).setResultCallback(
                 new ResultCallback<DetectedActivityResult>() {
